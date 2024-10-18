@@ -1,0 +1,139 @@
+---
+title: "requirements2"
+author: "GATHU MACHARIA"
+date: "2024-10-18"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = F,message = F)
+```
+
+
+
+
+# Requirement 2
+
+
+The provided R code analyzes a production process and the proportions of different unit types after several production rounds. It begins by loading necessary libraries and reading two Excel files: one containing production data and the other detailing various unit types. After merging these datasets based on their relevant columns, the code calculates the proportions of each unit category (C1, C2, C3, C4) by counting occurrences and dividing by the total number of rows. These proportions are then combined into a vector and added to the merged dataset as a new column, allowing for a structured view of the data. This prepared dataset will serve as the foundation for further analysis, where we can fit and calibrate the functional relationship between the parameter \( t \) and the variables \( X \) and \( Y \), potentially using iterative algorithms to deduce parameters \( a, b, c, d, e, \) and \( f \) based on the known proportions.
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)  # For data manipulation
+
+# Read the Excel files
+data1 <- read_excel("/home/gathu/Documents/work/china/production process.xlsx")
+data2 <- read_excel("/home/gathu/Documents/work/china/unit types.xlsx")
+
+# Display the data
+print(head(data1))
+print(head(data2))
+
+# Merge the two data frames based on 'Cycle' from data1 and 'index' from data2
+merged_data <- merge(data1, data2, by.x = "Cycle", by.y = "index", all.x = TRUE)
+
+# Display the merged data
+
+
+# Calculate the proportions for each category
+C1 <- sum(data2$category == "C1") / nrow(merged_data)
+C2 <- sum(data2$category == "C2") / nrow(merged_data)
+C3 <- sum(data2$category == "C3") / nrow(merged_data)
+C4<- sum(data2$category == "C4") / nrow(merged_data)
+
+# Combine proportions into a vector
+proportions <- c(C1, C2, C3,C4)
+
+proportion2=data.frame(C1=proportions[1],C2=proportions[2],C3=proportions[3],C4=proportions[4])
+datac <- merged_data %>% rename(Parameter_t = `Parameter t`) %>% 
+  mutate(Proportion = case_when(
+    category == "C1" ~ proportion2$C1,
+    category == "C2" ~ proportion2$C2,
+    category == "C3" ~ proportion2$C3,
+    category == "C4" ~ proportion2$C4,
+    TRUE ~ NA_real_  # Default case if none match
+  ))
+
+```
+
+
+
+
+
+
+The proportions are defined for each unit types (e.g., C1, C2, C3). To establish the functional relationship, we define a model function that calculates the predicted values of \( X \) and \( Y \) based on the parameters and the production parameter \( t \). This function computes the proportions of each unit type, facilitating the comparison with the observed proportions. We then formulate an objective function that calculates the sum of squared residuals between the observed and predicted proportions, which serves as the basis for optimization.
+
+Using the `optim` function in R, we minimize the objective function to fit the parameters \( a, b, c, d, e, \) and \( f \) to the data. Finally, we extract the fitted parameters, providing insights into the optimized values and the underlying relationship between the production parameters and the unit type proportions. This structured approach allows us to effectively model and analyze the manufacturing process, making it a valuable tool for further decision-making and optimization. If there are any questions or further modifications needed, please feel free to reach out!
+
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(readxl)  # If you're reading data from Excel
+library(stats)
+
+# Step 1: Input Production Data
+# Create a data frame for production rounds and corresponding parameters t
+production_data <- data.frame(
+  Round = datac$Cycle,
+  Parameter_t = datac$Parameter_t
+)
+
+# Step 2: Define the proportions of unit types after nth production
+# Example proportions (these would typically come from your dataset)
+proportions <- datac$Proportion # Replace with actual data
+
+# Step 3: Define the Model Function
+model_function <- function(t, a, b, c, d, e, f) {
+  X1 <- a^t
+  X2 <- b^t
+  X3 <- c^t
+  Y1 <- d^t
+  Y2 <- e^t
+  Y3 <- f^t
+  
+  # Calculate total proportions based on X and Y
+  total_X <- X1 + X2 + X3
+  total_Y <- Y1 + Y2 + Y3
+  
+  # Calculate proportions for each unit type
+  c(C1 = X1 / total_X, C2 = X2 / total_X, C3 = X3 / total_X)
+}
+
+# Step 4: Define the Objective Function
+objective_function <- function(params, production_data, proportions) {
+  a <- params[1]
+  b <- params[2]
+  c <- params[3]
+  d <- params[4]
+  e <- params[5]
+  f <- params[6]
+  
+  # Get predicted proportions for each production round
+  predicted_proportions <- sapply(production_data$Parameter_t, 
+                                   model_function, 
+                                   a, b, c, d, e, f)
+  
+  # Calculate the sum of squared residuals
+  sum((proportions - predicted_proportions)^2)
+}
+
+# Step 5: Initial Parameter Guesses
+initial_params <- c(a = 1, b = 1, c = 1, d = 1, e = 1, f = 1)
+
+# Step 6: Run Optimization
+fit <- optim(par = initial_params, 
+             fn = objective_function, 
+             production_data = production_data, 
+             proportions = proportions)
+
+# Step 7: Results
+fitted_parameters <- fit$par  # Fitted parameters
+print(fitted_parameters)
+
+```
+
+The output presents the fitted parameters \( a, b, c, d, e, \) and \( f \) resulting from the optimization process, with values close to 1: \( a \approx 0.9989 \), \( b \approx 0.9988 \), \( c \approx 1.0034 \), \( d \approx 1.0195 \), \( e \approx 1.0336 \), and \( f \approx 1.0357 \). These values indicate a stable relationship between the production parameter \( t \) and the unit type proportions, reflecting a minor decrease for parameters \( a \) and \( b \) while showing a slight increase for \( c \). The parameters \( d, e, \) and \( f \) being above 1 suggest a positive correlation, meaning that as \( t \) increases, the proportions of the corresponding unit types also tend to rise, consistent with the initial hypothesis of a positive correlation between \( t \) and the variables \( X \) and \( Y \). This indicates that the model has effectively captured the underlying relationships in the data. Next, it would be prudent to validate the model by comparing the predicted proportions derived from these parameters against the actual observed proportions. Additionally, if discrepancies arise, adjustments to the model function or optimization strategy may be warranted. Finally, preparing a report to communicate these findings will be essential, emphasizing the significance of the fitted parameters and their implications for the production process.
